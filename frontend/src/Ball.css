@@ -1,0 +1,28 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 100px;
+  font-family: sans-serif;
+}
+
+.ball {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, #00f2ff, #0011ff);
+  box-shadow: 0 0 30px rgba(0, 0, 255, 0.5);
+  cursor: pointer;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.status, .spoken-text {
+  margin-top: 20px;
+  font-size: 18px;
+}
