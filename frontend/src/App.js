@@ -60,7 +60,7 @@ function App() {
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value.toLowerCase())}
-          placeholder="e.g., john, tina"
+          placeholder="Type here.."
         />
         <button onClick={() => setRegistered(true)} disabled={!username.trim()}>
           Register
