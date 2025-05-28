@@ -17,6 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 const CONTACTS = {}; // Store { username: { socketId } }
+const MESSAGE_HISTORY = {}; // Store { recipient: { messageId: { from, message, socketId } } }
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -37,7 +38,8 @@ io.on("connection", (socket) => {
 });
 
 app.post("/api/send-message", async (req, res) => {
-  const { text, from } = req.body;
+  const { text, from, isEdit = false, originalMessageId } = req.body;
+  console.log("Received message request:", { text, from, isEdit, originalMessageId });
 
   try {
     const hfRes = await axios.post(
@@ -74,21 +76,77 @@ app.post("/api/send-message", async (req, res) => {
 
     const message = match[1];
     const recipient = match[2].toLowerCase();
+    const conversationKey = `${from.toLowerCase()}-${recipient}`;
 
     const recipientContact = CONTACTS[recipient];
     if (!recipientContact || !recipientContact.socketId) {
       return res.status(404).json({ error: "Recipient not connected" });
     }
 
+    // Initialize message history for recipient if it doesn't exist
+    if (!MESSAGE_HISTORY[recipient]) {
+      MESSAGE_HISTORY[recipient] = {};
+    }
+
+    if (isEdit && originalMessageId) {
+      console.log("Processing edit for message:", originalMessageId);
+      // Handle message edit
+      if (MESSAGE_HISTORY[recipient][originalMessageId]) {
+        // Update the existing message
+        MESSAGE_HISTORY[recipient][originalMessageId] = {
+          from,
+          message,
+          socketId: recipientContact.socketId,
+          timestamp: Date.now()
+        };
+
+        // Send update to recipient
+        io.to(recipientContact.socketId).emit("update_message", {
+          messageId: originalMessageId,
+          from,
+          message,
+          timestamp: Date.now()
+        });
+
+        return res.json({ 
+          success: true, 
+          message: "Message updated!",
+          messageId: originalMessageId
+        });
+      } else {
+        console.log("Message not found for edit:", originalMessageId);
+        return res.status(404).json({ error: "Message not found for editing" });
+      }
+    }
+
+    // Handle new message
+    const messageId = `${conversationKey}-${Date.now()}`;
+    console.log("Creating new message with ID:", messageId);
+    
+    // Store the new message
+    MESSAGE_HISTORY[recipient][messageId] = {
+      from,
+      message,
+      socketId: recipientContact.socketId,
+      timestamp: Date.now()
+    };
+
+    // Send new message to recipient
     io.to(recipientContact.socketId).emit("receive_message", {
       from,
-      message
+      message,
+      messageId,
+      timestamp: Date.now()
     });
 
-    return res.json({ success: true, message: "Message sent via WebSocket!" });
+    return res.json({ 
+      success: true, 
+      message: "Message sent!",
+      messageId
+    });
 
   } catch (err) {
-    console.error(err);
+    console.error("Error processing message:", err);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
