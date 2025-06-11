@@ -260,24 +260,41 @@ button:disabled::before {
 }
 
 h2 {
-  color: #f8fafc;
+  color: #e2e8f0;
   font-size: 1.5rem;
-  margin-bottom: 1rem;
-  font-weight: 600;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(15, 23, 42, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.1),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
   position: relative;
   z-index: 1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 h2::after {
   content: '';
   position: absolute;
-  bottom: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 50px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  inset: 0;
+  border-radius: 12px;
+  padding: 1px;
+  background: linear-gradient(
+    45deg,
+    rgba(59, 130, 246, 0.3),
+    rgba(255, 255, 255, 0.1)
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }
 
 .edit-button {
