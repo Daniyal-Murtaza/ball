@@ -10,7 +10,7 @@ function App() {
   const [isLogin, setIsLogin] = useState(true);
   const [registered, setRegistered] = useState(false);
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("Click the ball and speak...");
+  const [status, setStatus] = useState("");
   const [chat, setChat] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -70,7 +70,7 @@ function App() {
       
       if (data.success) {
         setRegistered(true);
-        setStatus("Welcome! Click the ball to start chatting.");
+        setStatus("hold the ball and say a name...");
       } else {
         setStatus(`❌ ${data.error}`);
       }
