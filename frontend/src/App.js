@@ -6,6 +6,8 @@ const socket = io("http://localhost:5000");
 
 function App() {
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLogin, setIsLogin] = useState(true);
   const [registered, setRegistered] = useState(false);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("Click the ball and speak...");
@@ -52,6 +54,30 @@ function App() {
       };
     }
   }, [registered, username]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const endpoint = isLogin ? "/api/login" : "/api/register";
+    
+    try {
+      const res = await fetch(`http://localhost:5000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+      
+      if (data.success) {
+        setRegistered(true);
+        setStatus("Welcome! Click the ball to start chatting.");
+      } else {
+        setStatus(`❌ ${data.error}`);
+      }
+    } catch (err) {
+      setStatus("❌ Failed to contact server.");
+    }
+  };
 
   const handleVoiceInput = () => {
     const recognition = new window.webkitSpeechRecognition();
@@ -166,15 +192,36 @@ function App() {
   if (!registered) {
     return (
       <div className="container">
-        <h2>Enter your username:</h2>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value.toLowerCase())}
-          placeholder="Type here.."
-        />
-        <button onClick={() => setRegistered(true)} disabled={!username.trim()}>
-          Register
-        </button>
+        <h2>{isLogin ? "Login" : "Register"}</h2>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.toLowerCase())}
+            placeholder="Username"
+            required
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+          />
+          <button type="submit" disabled={!username.trim() || !password.trim()}>
+            {isLogin ? "Login" : "Register"}
+          </button>
+          <button 
+            type="button" 
+            className="switch-auth"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setStatus("");
+            }}
+          >
+            {isLogin ? "Need an account? Register" : "Have an account? Login"}
+          </button>
+        </form>
+        <p className="status">{status}</p>
       </div>
     );
   }

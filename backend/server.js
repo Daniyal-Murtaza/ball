@@ -4,6 +4,7 @@ const axios = require("axios");
 const { Server } = require("socket.io");
 const http = require("http");
 const pool = require("./config/database");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 const app = express();
@@ -16,6 +17,73 @@ const io = new Server(httpServer, {
 
 app.use(cors());
 app.use(express.json());
+
+// Login endpoint
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const [users] = await pool.query(
+      "SELECT * FROM users WHERE username = ?",
+      [username.toLowerCase()]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    const user = users[0];
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Login successful",
+      username: user.username
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Register endpoint
+app.post("/api/register", async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    // Check if username already exists
+    const [existingUsers] = await pool.query(
+      "SELECT * FROM users WHERE username = ?",
+      [username.toLowerCase()]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ error: "Username already exists" });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new user
+    await pool.query(
+      "INSERT INTO users (username, password) VALUES (?, ?)",
+      [username.toLowerCase(), hashedPassword]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Registration successful",
+      username: username.toLowerCase()
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 io.on("connection", async (socket) => {
   console.log("User connected:", socket.id);
@@ -32,12 +100,6 @@ io.on("connection", async (socket) => {
         await pool.query(
           "UPDATE users SET socket_id = ? WHERE username = ?",
           [socket.id, username.toLowerCase()]
-        );
-      } else {
-        // Create new user
-        await pool.query(
-          "INSERT INTO users (username, socket_id) VALUES (?, ?)",
-          [username.toLowerCase(), socket.id]
         );
       }
       console.log(`Registered ${username} with socket ID ${socket.id}`);
