@@ -3,6 +3,7 @@ const cors = require("cors");
 const axios = require("axios");
 const { Server } = require("socket.io");
 const http = require("http");
+const pool = require("./config/database");
 require("dotenv").config();
 
 const app = express();
@@ -16,23 +17,44 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-const CONTACTS = {}; // Store { username: { socketId } }
-const MESSAGE_HISTORY = {}; // Store { recipient: { messageId: { from, message, socketId } } }
-
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("User connected:", socket.id);
 
-  socket.on("register", (username) => {
-    CONTACTS[username.toLowerCase()] = { socketId: socket.id };
-    console.log(`Registered ${username} with socket ID ${socket.id}`);
+  socket.on("register", async (username) => {
+    try {
+      const [existingUser] = await pool.query(
+        "SELECT * FROM users WHERE username = ?",
+        [username.toLowerCase()]
+      );
+
+      if (existingUser.length > 0) {
+        // Update existing user's socket_id
+        await pool.query(
+          "UPDATE users SET socket_id = ? WHERE username = ?",
+          [socket.id, username.toLowerCase()]
+        );
+      } else {
+        // Create new user
+        await pool.query(
+          "INSERT INTO users (username, socket_id) VALUES (?, ?)",
+          [username.toLowerCase(), socket.id]
+        );
+      }
+      console.log(`Registered ${username} with socket ID ${socket.id}`);
+    } catch (error) {
+      console.error("Error registering user:", error);
+    }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     console.log("User disconnected:", socket.id);
-    for (const user in CONTACTS) {
-      if (CONTACTS[user].socketId === socket.id) {
-        delete CONTACTS[user];
-      }
+    try {
+      await pool.query(
+        "UPDATE users SET socket_id = NULL WHERE socket_id = ?",
+        [socket.id]
+      );
+    } catch (error) {
+      console.error("Error handling disconnect:", error);
     }
   });
 });
@@ -76,63 +98,52 @@ app.post("/api/send-message", async (req, res) => {
 
     const message = match[1];
     const recipient = match[2].toLowerCase();
-    const conversationKey = `${from.toLowerCase()}-${recipient}`;
 
-    const recipientContact = CONTACTS[recipient];
-    if (!recipientContact || !recipientContact.socketId) {
+    // Check if recipient exists and is online
+    const [recipientUser] = await pool.query(
+      "SELECT * FROM users WHERE username = ? AND socket_id IS NOT NULL",
+      [recipient]
+    );
+
+    if (recipientUser.length === 0) {
       return res.status(404).json({ error: "Recipient not connected" });
-    }
-
-    // Initialize message history for recipient if it doesn't exist
-    if (!MESSAGE_HISTORY[recipient]) {
-      MESSAGE_HISTORY[recipient] = {};
     }
 
     if (isEdit && originalMessageId) {
       console.log("Processing edit for message:", originalMessageId);
-      // Handle message edit
-      if (MESSAGE_HISTORY[recipient][originalMessageId]) {
-        // Update the existing message
-        MESSAGE_HISTORY[recipient][originalMessageId] = {
-          from,
-          message,
-          socketId: recipientContact.socketId,
-          timestamp: Date.now()
-        };
+      
+      // Update message in database
+      await pool.query(
+        "UPDATE messages SET message = ?, is_edited = TRUE WHERE id = ?",
+        [message, originalMessageId]
+      );
 
-        // Send update to recipient
-        io.to(recipientContact.socketId).emit("update_message", {
-          messageId: originalMessageId,
-          from,
-          message,
-          timestamp: Date.now()
-        });
+      // Send update to recipient
+      io.to(recipientUser[0].socket_id).emit("update_message", {
+        messageId: originalMessageId,
+        from,
+        message,
+        timestamp: Date.now()
+      });
 
-        return res.json({ 
-          success: true, 
-          message: "Message updated!",
-          messageId: originalMessageId
-        });
-      } else {
-        console.log("Message not found for edit:", originalMessageId);
-        return res.status(404).json({ error: "Message not found for editing" });
-      }
+      return res.json({ 
+        success: true, 
+        message: "Message updated!",
+        messageId: originalMessageId
+      });
     }
 
     // Handle new message
-    const messageId = `${conversationKey}-${Date.now()}`;
-    console.log("Creating new message with ID:", messageId);
+    const messageId = `${from.toLowerCase()}-${recipient}-${Date.now()}`;
     
-    // Store the new message
-    MESSAGE_HISTORY[recipient][messageId] = {
-      from,
-      message,
-      socketId: recipientContact.socketId,
-      timestamp: Date.now()
-    };
+    // Store message in database
+    await pool.query(
+      "INSERT INTO messages (id, sender, recipient, message) VALUES (?, ?, ?, ?)",
+      [messageId, from.toLowerCase(), recipient, message]
+    );
 
     // Send new message to recipient
-    io.to(recipientContact.socketId).emit("receive_message", {
+    io.to(recipientUser[0].socket_id).emit("receive_message", {
       from,
       message,
       messageId,
