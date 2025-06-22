@@ -9,9 +9,9 @@ async function testConnection() {
     // Test query to check if tables exist
     const [tables] = await connection.query('SHOW TABLES');
     console.log('\nTables in database:');
-    tables.forEach(table => {
+    tables.forEach(table => { 
       console.log(`- ${Object.values(table)[0]}`);
-    });
+    }); 
 
     // Test users table
     const [users] = await connection.query('SELECT * FROM users');
